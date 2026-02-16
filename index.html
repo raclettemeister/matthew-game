@@ -71,6 +71,13 @@ let settingsSfx = localStorage.getItem('matthew-game-sfx') !== 'false';
 function saveSettings() {
   localStorage.setItem('matthew-game-music', settingsMusic ? 'true' : 'false');
   localStorage.setItem('matthew-game-sfx', settingsSfx ? 'true' : 'false');
+  if (!settingsMusic) {
+    if (audioMenu) audioMenu.pause();
+    if (audioGame) audioGame.pause();
+    if (audioFortnite) audioFortnite.pause();
+    titleMusicPlaying = false;
+    gameMusicPlaying = false;
+  }
 }
 
 function drawGearIcon(x, y, color) {
@@ -125,7 +132,7 @@ document.addEventListener('keydown', e => {
     if (e.code === 'Enter' || e.code === 'Space') { game.phase = 'play'; e.preventDefault(); }
     return;
   }
-  if ((game.phase === 'win' || game.phase === 'gameover') && (e.code === 'Enter' || e.code === 'Space')) { game = null; e.preventDefault(); }
+  if ((game.phase === 'win' || game.phase === 'gameover') && (e.code === 'Enter' || e.code === 'Space')) { game = null; titleMusicPlaying = false; stopGameMusic(); stopFortniteMusic(); e.preventDefault(); }
   if (game.phase === 'play' && !game.playingFortnite && !game.mom.active && !game.player.carrying && e.code === 'KeyF') {
     game.playingFortnite = true;
     initFortnite();
@@ -151,6 +158,21 @@ canvas.addEventListener('mousedown', e => {
       if (mx >= tabParams.x && mx <= tabParams.x + tabParams.w && my >= tabParams.y && my <= tabParams.y + tabParams.h) { burgerTab = 'params'; return; }
       if (mx >= tabSucces.x && mx <= tabSucces.x + tabSucces.w && my >= tabSucces.y && my <= tabSucces.y + tabSucces.h) { burgerTab = 'succes'; return; }
       if (mx >= tabShop.x && mx <= tabShop.x + tabShop.w && my >= tabShop.y && my <= tabShop.y + tabShop.h) { burgerTab = 'shop'; return; }
+      if (burgerTab === 'params') {
+        const contentY = panelY + tabH + 12;
+        if (indicationsViewOpen) {
+          const ly = contentY + 36 + 14*6 + 20;
+          const retourBtn = { x: panelX + panelW/2 - 40, y: ly, w: 80, h: 24 };
+          if (mx >= retourBtn.x && mx <= retourBtn.x + retourBtn.w && my >= retourBtn.y && my <= retourBtn.y + retourBtn.h) { indicationsViewOpen = false; return; }
+        } else {
+          const mBtn = { x: panelX + panelW - 90, y: contentY + 22, w: 70, h: 32 };
+          const sBtn = { x: panelX + panelW - 90, y: contentY + 78, w: 70, h: 32 };
+          const voirBtn = { x: panelX + panelW - 90, y: contentY + 134, w: 70, h: 32 };
+          if (mx >= mBtn.x && mx <= mBtn.x + mBtn.w && my >= mBtn.y && my <= mBtn.y + mBtn.h) { settingsMusic = !settingsMusic; saveSettings(); return; }
+          if (mx >= sBtn.x && mx <= sBtn.x + sBtn.w && my >= sBtn.y && my <= sBtn.y + sBtn.h) { settingsSfx = !settingsSfx; saveSettings(); return; }
+          if (mx >= voirBtn.x && mx <= voirBtn.x + voirBtn.w && my >= voirBtn.y && my <= voirBtn.y + voirBtn.h) { indicationsViewOpen = true; return; }
+        }
+      }
       return;
     }
     if (titleParamsOpen) {
@@ -168,7 +190,7 @@ canvas.addEventListener('mousedown', e => {
     game.phase = 'play';
     return;
   }
-  if (game.phase === 'win' || game.phase === 'gameover') { game = null; return; }
+  if (game.phase === 'win' || game.phase === 'gameover') { game = null; titleMusicPlaying = false; stopGameMusic(); stopFortniteMusic(); return; }
   if (game.phase !== 'play' || game.mom.active) return;
   if (game.playingFortnite) {
     if (typeof fn !== 'undefined' && fn) fn.shooting = true;
@@ -220,6 +242,8 @@ canvas.addEventListener('wheel', e => {
 }, { passive: false });
 
 function startGame(debugMode) {
+  stopMenuMusic();
+  titleMusicPlaying = false;
   const itemPositions = [
     [80,120],[120,180],[160,140],[200,200],[240,160],[280,220],[320,180],[360,140],[400,200],[420,160],
     [70,200],[150,220],[250,120],[350,200],[100,160],[300,180],[180,240],[380,120],
@@ -276,10 +300,68 @@ function startGame(debugMode) {
   if (debugMode) game.testeurJustUnlocked = (localStorage.getItem('matthew-game-success-testeur') !== 'true');
 }
 
-// ── MUSIQUE (Web Audio API) ──
+// ── MUSIQUE (MP3 menu / jeu / fortnite + Web Audio pour SFX et maman) ──
 let audioCtx = null;
-let bgOsc = null, bgGain = null, bgInterval = null;
 let scaryOsc1 = null, scaryOsc2 = null, scaryGain = null, scaryTimeout = null;
+let audioMenu = null, audioGame = null, audioFortnite = null;
+let titleMusicPlaying = false, gameMusicPlaying = false, fortniteMusicPlaying = false;
+
+function initMusicTracks() {
+  if (audioMenu) return;
+  audioMenu = new Audio('sounds/menu.mp3');
+  audioMenu.loop = true;
+  audioGame = new Audio('sounds/game.mp3');
+  audioGame.loop = true;
+  audioFortnite = new Audio('sounds/fortnite.mp3');
+  audioFortnite.loop = true;
+}
+
+function playMenuMusic() {
+  if (!settingsMusic) return;
+  initMusicTracks();
+  audioGame.pause();
+  audioFortnite.pause();
+  audioMenu.currentTime = 0;
+  audioMenu.volume = 0.5;
+  audioMenu.play().catch(() => {});
+  titleMusicPlaying = true;
+}
+
+function stopMenuMusic() {
+  if (audioMenu) audioMenu.pause();
+  titleMusicPlaying = false;
+}
+
+function playGameMusic() {
+  if (!settingsMusic) return;
+  initMusicTracks();
+  audioMenu.pause();
+  audioFortnite.pause();
+  audioGame.currentTime = 0;
+  audioGame.volume = 0.5;
+  audioGame.play().catch(() => {});
+  gameMusicPlaying = true;
+}
+
+function stopGameMusic() {
+  if (audioGame) audioGame.pause();
+  gameMusicPlaying = false;
+}
+
+function playFortniteMusic() {
+  if (!settingsMusic) return;
+  initMusicTracks();
+  audioMenu.pause();
+  audioGame.pause();
+  audioFortnite.currentTime = 0;
+  audioFortnite.volume = 0.5;
+  audioFortnite.play().catch(() => {});
+}
+
+function stopFortniteMusic() {
+  if (audioFortnite) audioFortnite.pause();
+  fortniteMusicPlaying = false;
+}
 
 function initAudio() {
   if(audioCtx) return;
@@ -307,40 +389,13 @@ function playPopSound() {
 }
 
 function startBgMusic() {
-  if(!settingsMusic) return;
-  if(!audioCtx) initAudio();
-  if(!audioCtx) return;
-  if(audioCtx.state === 'suspended') audioCtx.resume();
-  if(bgInterval) return;
-  try {
-    bgGain = audioCtx.createGain();
-    bgGain.gain.value = 0.05;
-    bgGain.connect(audioCtx.destination);
-    const playNote = (freq, duration) => {
-      const osc = audioCtx.createOscillator();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-      const g = audioCtx.createGain();
-      g.gain.setValueAtTime(0.06, audioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-      osc.connect(g);
-      g.connect(bgGain);
-      osc.start(audioCtx.currentTime);
-      osc.stop(audioCtx.currentTime + duration);
-    };
-    const notes = [262, 330, 392, 523, 392, 330, 294, 330];
-    let idx = 0;
-    bgInterval = setInterval(() => {
-      if(!settingsMusic || !game || game.phase !== 'play' || (game.mom && game.mom.active)) return;
-      playNote(notes[idx % notes.length], 0.35);
-      idx++;
-    }, 480);
-  } catch(e) {}
+  if (!settingsMusic) return;
+  gameMusicPlaying = true;
+  playGameMusic();
 }
 
 function stopBgMusic() {
-  if(bgInterval) { clearInterval(bgInterval); bgInterval = null; }
-  if(bgGain) { try { bgGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1); } catch(e) {} bgGain = null; }
+  stopGameMusic();
 }
 
 function playScaryMusic() {
@@ -1112,6 +1167,8 @@ const FN_ENEMY_COUNT = 48;
 let fn = null; // fortnite mini-game state (global for index + minigame)
 
 function initFortnite() {
+  gameMusicPlaying = false;
+  playFortniteMusic();
   const CENTER_X = 900, CENTER_Y = 900, VILLAGE_R = 285;
   const trees = [];
   for(let i = 0; i < 120; i++) {
@@ -1902,6 +1959,7 @@ function drawFortnite() {
 }
 
 function stopFortnite() {
+  stopFortniteMusic();
   if (fn) {
     if (typeof game !== 'undefined' && game) {
       if ('fnKills' in game) game.fnKills += fn.kills;
@@ -1911,7 +1969,7 @@ function stopFortnite() {
     }
   }
   fn = null;
-  if (typeof game !== 'undefined' && game) game.playingFortnite = false;
+  if (typeof game !== 'undefined' && game) { game.playingFortnite = false; startBgMusic(); }
 }
 
 
@@ -1944,9 +2002,12 @@ function addMessage(x,y,text,color) { game.messages.push({x,y,text,color,life:90
 
 // ── UPDATE ──
 function update() {
-  // Don't clear E "just pressed" when in Fortnite so car enter/exit can use it
-  if (!game || !game.playingFortnite) eKeyJustPressed = false;
-  if(!game) return;
+  if (!game) {
+    if (!titleMusicPlaying && settingsMusic) { playMenuMusic(); titleMusicPlaying = true; }
+    return;
+  }
+  if (!game.playingFortnite) eKeyJustPressed = false;
+  if (game.phase === 'play' && !game.playingFortnite && !game.mom.active && !gameMusicPlaying && settingsMusic) startBgMusic();
   if(game.phase === 'win' || game.phase === 'gameover') {
     stopBgMusic();
     const best = parseInt(localStorage.getItem('matthew-game-bestScore') || '0', 10);
@@ -2640,7 +2701,8 @@ function draw() {
       drawText(`AIDE ONCLE JULIEN: ${game.julienVisits}`, W/2, 223, '#40e0a0', 1, 'center');
       drawText(`ERREURS: ${game.mistakes}`, W/2, 236, PAL.textDim, 1, 'center');
       if(Math.sin(Date.now()/400)>0) drawText('F: FORTNITE ILLIMITE', W/2, 245, '#40d870', 1, 'center');
-      drawText('ENTREE: REJOUER', W/2, 260, PAL.textDim, 1, 'center');
+      drawText('ENTREE: REJOUER', W/2, 258, PAL.textDim, 1, 'center');
+      drawText('CREDITS : JULIEN & MATTHEW', W/2, 268, PAL.textDim, 1, 'center');
       drawVersionAndRefresh();
     }
   }
@@ -2664,7 +2726,8 @@ function draw() {
     drawText('Verifiez votre connexion.', W/2, 110, PAL.textDim, 1, 'center');
     drawText('Maman a debranche la box...', W/2, 132, '#a06060', 1, 'center');
     drawText(`SCORE: ${game.score}  |  RANGE: ${game.cleaned}/${game.totalItems}`, W/2, 155, PAL.textDim, 1, 'center');
-    if(Math.sin(Date.now()/400)>0) drawText('ENTREE: REJOUER', W/2, 240, PAL.textGold, 1, 'center');
+    if(Math.sin(Date.now()/400)>0) drawText('ENTREE: REJOUER', W/2, 238, PAL.textGold, 1, 'center');
+    drawText('CREDITS : JULIEN & MATTHEW', W/2, 258, PAL.textDim, 1, 'center');
     drawVersionAndRefresh();
   }
   ctx.restore();
