@@ -41,7 +41,7 @@ canvas.width = W * PIXEL_SCALE;
 canvas.height = H * PIXEL_SCALE;
 
 // Version du jeu — incrémenter à chaque mise à jour pour vérifier qu'on a la dernière
-const GAME_VERSION = '1.4';
+const GAME_VERSION = '1.5';
 let game = null;
 const REFRESH_ZONE = { x: W - 82, y: H - 14, w: 78, h: 12 };
 
@@ -143,7 +143,7 @@ canvas.addEventListener('mousedown', e => {
     if (titleBurgerOpen) {
       const margin = 6, panelW = W - margin * 2, panelX = margin, panelY = margin;
       const closeBtn = { x: panelX + panelW - 58, y: panelY + 6, w: 48, h: 26 };
-      if (mx >= closeBtn.x && mx <= closeBtn.x + closeBtn.w && my >= closeBtn.y && my <= closeBtn.y + closeBtn.h) { titleBurgerOpen = false; return; }
+      if (mx >= closeBtn.x && mx <= closeBtn.x + closeBtn.w && my >= closeBtn.y && my <= closeBtn.y + closeBtn.h) { titleBurgerOpen = false; succesScrollY = 0; return; }
       const tabH = 36, tabW = (panelW - 24) / 3;
       const tabParams = { x: panelX + 6, y: panelY + 6, w: tabW - 2, h: tabH - 4 };
       const tabSucces = { x: panelX + 6 + tabW, y: panelY + 6, w: tabW - 2, h: tabH - 4 };
@@ -209,6 +209,15 @@ canvas.addEventListener('mouseup', e => {
   if (game && game.playingFortnite && typeof fn !== 'undefined' && fn) fn.shooting = false;
   mouse.down = false;
 });
+canvas.addEventListener('wheel', e => {
+  if (!game && titleBurgerOpen && burgerTab === 'succes') {
+    e.preventDefault();
+    const margin = 6, panelH = H - margin * 2, tabH = 36, contentH = panelH - tabH - 36;
+    const listHeight = 32 + 6 * 40;
+    const maxScroll = Math.max(0, listHeight - contentH);
+    succesScrollY = Math.max(0, Math.min(maxScroll, succesScrollY + e.deltaY));
+  }
+}, { passive: false });
 
 function startGame(debugMode) {
   const itemPositions = [
@@ -238,7 +247,7 @@ function startGame(debugMode) {
     momAlert: 0,
     playingFortnite: false,
     playedFortniteOnce: false,
-    mom: { active: false, phase: 'idle', timer: 0, x: 500, phrase: '' },
+    mom: { active: false, phase: 'idle', timer: 0, x: 500, y: 95, phrase: '' },
     momVisits: 0,
     julien: { active: false, phase: 'idle', x: -50, y: 95, carrying: null, timer: 0, frame: 0, targetItem: null, targetZone: null, targetX: null, targetY: null, onMapTimer: 0 },
     julienVisits: 0,
@@ -1911,7 +1920,7 @@ function stopFortnite() {
 function triggerMom() {
   if(game && game.debugMode) return;
   if(!game || game.mom.active || game.phase!=='play') return;
-  game.mom.active=true; game.mom.phase='entering'; game.mom.timer=0; game.mom.x=480; game.momVisits++;
+  game.mom.active=true; game.mom.phase='entering'; game.mom.timer=0; game.mom.x=480; game.mom.y=95; game.momVisits++;
   const phrases = ['RANGE TA CHAMBRE!!','C EST QUOI CE BAZAR?!','MATTHEW!!','J EN AI MARRE!!','TU JOUES ENCORE?!','ETEINS CE JEU!!','ATTENDS UN PEU!!','TU ES PUNI!!','DIS-LE PLUTOT!!','TU FAIS QUOI?!','TU PEUX ME METTRE UN NOUVEAU TEXTE?!'];
   game.mom.phrase = phrases[Math.floor(Math.random()*phrases.length)];
   try { playScaryMusic(); } catch(e) {}
@@ -2013,6 +2022,10 @@ function update() {
     }
   } else {
     if(game.timeLeft%60===0) game.addiction = Math.max(0, game.addiction-0.5);
+    // Succès Pro-gamer : addiction à 100%
+    if(game.addiction >= 100 && localStorage.getItem('matthew-game-success-progamer') !== 'true') {
+      localStorage.setItem('matthew-game-success-progamer', 'true');
+    }
     // Messages des joueurs qui râlent quand il ne joue pas
     if(!game.mom.active) {
       if(game.joueurMsg) {
@@ -2288,30 +2301,52 @@ function draw() {
         const hasDefaite = localStorage.getItem('matthew-game-success-defaite') === 'true';
         const hasTesteur = localStorage.getItem('matthew-game-success-testeur') === 'true';
         const hasAideCollective = localStorage.getItem('matthew-game-success-aide-collective') === 'true';
+        const hasProGamer = localStorage.getItem('matthew-game-success-progamer') === 'true';
         const hasRoi = localStorage.getItem('matthew-game-success-roi') === 'true';
-        const totalSucces = (hasVictoire ? 1 : 0) + (hasDefaite ? 1 : 0) + (hasTesteur ? 1 : 0) + (hasAideCollective ? 1 : 0) + (hasRoi ? 1 : 0);
-        drawText('SUCCES', panelX + panelW/2, contentY + 18, PAL.textGold, 2, 'center');
-        drawPixelRect(panelX + 24, contentY + 32, panelW - 48, 32, hasVictoire ? '#1a3020' : '#181820');
-        drawPixelRect(panelX + 26, contentY + 34, panelW - 52, 28, hasVictoire ? '#204030' : '#202020');
-        drawText('VICTOIRE ECRASANTE', panelX + panelW/2, contentY + 50, hasVictoire ? '#40ff80' : PAL.textDim, 2, 'center');
-        if(hasVictoire) drawText('Debloque!', panelX + panelW/2, contentY + 64, PAL.textGold, 1, 'center');
-        drawPixelRect(panelX + 24, contentY + 72, panelW - 48, 32, hasDefaite ? '#2a201a' : '#181820');
-        drawPixelRect(panelX + 26, contentY + 74, panelW - 52, 28, hasDefaite ? '#302820' : '#202020');
-        drawText('DEFAITE ECRASANTE', panelX + panelW/2, contentY + 90, hasDefaite ? '#ff8040' : PAL.textDim, 2, 'center');
-        if(hasDefaite) drawText('Debloque!', panelX + panelW/2, contentY + 104, PAL.textGold, 1, 'center');
-        drawPixelRect(panelX + 24, contentY + 112, panelW - 48, 32, hasTesteur ? '#2a2a18' : '#181820');
-        drawPixelRect(panelX + 26, contentY + 114, panelW - 52, 28, hasTesteur ? '#303028' : '#202020');
-        drawText('TESTEUR', panelX + panelW/2, contentY + 130, hasTesteur ? '#e0d040' : PAL.textDim, 2, 'center');
-        if(hasTesteur) drawText('Debloque!', panelX + panelW/2, contentY + 144, PAL.textGold, 1, 'center');
-        drawPixelRect(panelX + 24, contentY + 152, panelW - 48, 32, hasAideCollective ? '#1a281a' : '#181820');
-        drawPixelRect(panelX + 26, contentY + 154, panelW - 52, 28, hasAideCollective ? '#203028' : '#202020');
-        drawText('AIDE COLLECTIVE', panelX + panelW/2, contentY + 170, hasAideCollective ? '#40e0a0' : PAL.textDim, 2, 'center');
-        if(hasAideCollective) drawText('Debloque!', panelX + panelW/2, contentY + 184, PAL.textGold, 1, 'center');
-        drawPixelRect(panelX + 24, contentY + 192, panelW - 48, 32, hasRoi ? '#2a1830' : '#181820');
-        drawPixelRect(panelX + 26, contentY + 194, panelW - 52, 28, hasRoi ? '#302840' : '#202020');
-        drawText('LE ROI DES SUCCES', panelX + panelW/2, contentY + 210, hasRoi ? '#e0a0ff' : PAL.textDim, 2, 'center');
-        if(hasRoi) drawText('Yacine: STRAWBERRY ELEPHANT', panelX + panelW/2, contentY + 224, PAL.textGold, 1, 'center');
-        drawText(totalSucces + ' succes', panelX + panelW/2, panelY + panelH - 24, PAL.textDim, 2, 'center');
+        const totalSucces = (hasVictoire ? 1 : 0) + (hasDefaite ? 1 : 0) + (hasTesteur ? 1 : 0) + (hasAideCollective ? 1 : 0) + (hasProGamer ? 1 : 0) + (hasRoi ? 1 : 0);
+        const contentH = panelH - tabH - 36;
+        const succesItemH = 40;
+        const succesListHeight = 32 + 6 * succesItemH;
+        const succesScrollMax = Math.max(0, succesListHeight - contentH);
+        succesScrollY = Math.min(succesScrollMax, Math.max(0, succesScrollY));
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(panelX + 24, contentY, panelW - 48, contentH);
+        ctx.clip();
+        let sy = contentY + 18 - succesScrollY;
+        drawText('SUCCES', panelX + panelW/2, sy, PAL.textGold, 2, 'center');
+        sy = contentY + 32 - succesScrollY;
+        drawPixelRect(panelX + 24, sy, panelW - 48, 32, hasVictoire ? '#1a3020' : '#181820');
+        drawPixelRect(panelX + 26, sy + 2, panelW - 52, 28, hasVictoire ? '#204030' : '#202020');
+        drawText('VICTOIRE ECRASANTE', panelX + panelW/2, sy + 18, hasVictoire ? '#40ff80' : PAL.textDim, 2, 'center');
+        if(hasVictoire) drawText('Debloque!', panelX + panelW/2, sy + 32, PAL.textGold, 1, 'center');
+        sy += succesItemH;
+        drawPixelRect(panelX + 24, sy, panelW - 48, 32, hasDefaite ? '#2a201a' : '#181820');
+        drawPixelRect(panelX + 26, sy + 2, panelW - 52, 28, hasDefaite ? '#302820' : '#202020');
+        drawText('DEFAITE ECRASANTE', panelX + panelW/2, sy + 18, hasDefaite ? '#ff8040' : PAL.textDim, 2, 'center');
+        if(hasDefaite) drawText('Debloque!', panelX + panelW/2, sy + 32, PAL.textGold, 1, 'center');
+        sy += succesItemH;
+        drawPixelRect(panelX + 24, sy, panelW - 48, 32, hasTesteur ? '#2a2a18' : '#181820');
+        drawPixelRect(panelX + 26, sy + 2, panelW - 52, 28, hasTesteur ? '#303028' : '#202020');
+        drawText('TESTEUR', panelX + panelW/2, sy + 18, hasTesteur ? '#e0d040' : PAL.textDim, 2, 'center');
+        if(hasTesteur) drawText('Debloque!', panelX + panelW/2, sy + 32, PAL.textGold, 1, 'center');
+        sy += succesItemH;
+        drawPixelRect(panelX + 24, sy, panelW - 48, 32, hasAideCollective ? '#1a281a' : '#181820');
+        drawPixelRect(panelX + 26, sy + 2, panelW - 52, 28, hasAideCollective ? '#203028' : '#202020');
+        drawText('AIDE COLLECTIVE', panelX + panelW/2, sy + 18, hasAideCollective ? '#40e0a0' : PAL.textDim, 2, 'center');
+        if(hasAideCollective) drawText('Debloque!', panelX + panelW/2, sy + 32, PAL.textGold, 1, 'center');
+        sy += succesItemH;
+        drawPixelRect(panelX + 24, sy, panelW - 48, 32, hasProGamer ? '#1a1a30' : '#181820');
+        drawPixelRect(panelX + 26, sy + 2, panelW - 52, 28, hasProGamer ? '#282840' : '#202020');
+        drawText('PRO-GAMER', panelX + panelW/2, sy + 18, hasProGamer ? '#9080ff' : PAL.textDim, 2, 'center');
+        if(hasProGamer) drawText('Addiction 100%!', panelX + panelW/2, sy + 32, PAL.textGold, 1, 'center');
+        sy += succesItemH;
+        drawPixelRect(panelX + 24, sy, panelW - 48, 32, hasRoi ? '#2a1830' : '#181820');
+        drawPixelRect(panelX + 26, sy + 2, panelW - 52, 28, hasRoi ? '#302840' : '#202020');
+        drawText('LE ROI DES SUCCES', panelX + panelW/2, sy + 18, hasRoi ? '#e0a0ff' : PAL.textDim, 2, 'center');
+        if(hasRoi) drawText('Yacine: STRAWBERRY ELEPHANT', panelX + panelW/2, sy + 32, PAL.textGold, 1, 'center');
+        ctx.restore();
+        drawText(totalSucces + ' succes (defiler molette)', panelX + panelW/2, panelY + panelH - 24, PAL.textDim, 2, 'center');
       }
       drawVersionAndRefresh();
       ctx.restore();
