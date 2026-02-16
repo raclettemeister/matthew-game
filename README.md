@@ -4,7 +4,7 @@ Jeu pixel-art : range ta chambre avant que Maman n’arrive.
 
 ## Version
 
-**v1.4**
+**v1.6**
 
 ## Lancer le jeu
 
@@ -14,6 +14,7 @@ Pour tester uniquement le mode Fortnite en standalone : ouvre `minigame.html`.
 
 ## Changelog
 
+- **1.6** — Splash vidéo au démarrage (écran START puis splash avec fondu sonore en fin) ; mini-jeu Fortnite : voiture unique style Fortnite (E pour monter/descendre), écrasement des NPCs, explosion après 5 balles avec sprite et son, cible prioritaire quand le joueur est en voiture
 - **1.4** — Correction menu principal : onglets Shop et Succès cliquables dans le menu burger ; version affichée mise à jour
 - **1.0** — Fortnite minigame amélioré : NPCs (ciblage proche/brawl, combat prioritaire, storm, HP critique, précision variable), voiture et armes au sol redessinés, résolution 960×540 en standalone, dégâts et portée des balles renforcés, NPCs ramassent les armes
 - **0.9** — Version de base
