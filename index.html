@@ -388,6 +388,26 @@ function playPopSound() {
   } catch(e) {}
 }
 
+function playCarExplosionSound() {
+  if(!settingsSfx) return;
+  if(!audioCtx) initAudio();
+  if(!audioCtx) return;
+  try {
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.15);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.25, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+    osc.connect(g);
+    g.connect(audioCtx.destination);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.4);
+  } catch(e) {}
+}
+
 function startBgMusic() {
   if (!settingsMusic) return;
   gameMusicPlaying = true;
@@ -1071,8 +1091,8 @@ const FN_STORM_PHASES = [[1800,900],[1200,540],[900,300],[750,165],[600,105],[45
 const FN_STORM_DAMAGE_PER_PHASE = [8,10,14,18,24,32];
 const FN_STORM_DAMAGE_INTERVAL = 12;
 const FN_STORM_ENEMY_DAMAGE_MULT = 0.5;
-const FN_CAR_SPEED = 0.25, FN_CAR_FRICTION = 0.92, FN_CAR_MAX_SPEED = 4.5;
-const FN_CAR_RADIUS = 14, FN_CAR_ENTER_DIST = 32;
+const FN_CAR_SPEED = 0.28, FN_CAR_FRICTION = 0.92, FN_CAR_MAX_SPEED = 4;
+const FN_CAR_RADIUS = 14, FN_CAR_ENTER_DIST = 40;
 // Real-game style: many weak bullets, few heavy. Rarer = better (Fortnite colors).
 const FN_WEAPONS = {
   pistol: { name: 'Pistol', dmg: 4, cooldown: 14, ammoMax: 16, bulletSpeed: 3.2, spread: 0.12, pellets: 1 },
@@ -1103,6 +1123,10 @@ const FN_TARGET_MAX_DIST = 400;
 const FN_BRAWL_RADIUS = 150;
 const FN_SHOOT_RANGE_MIN = 50, FN_SHOOT_RANGE_MAX = 200;
 function fnPickTarget(enemy, fn) {
+  if (fn.inCar && fn.alive) {
+    const dist = Math.hypot(fn.px - enemy.x, fn.py - enemy.y);
+    if (dist < FN_TARGET_MAX_DIST) return { x: fn.px, y: fn.py, hp: fn.hp, shield: fn.shield, eff: fn.hp + fn.shield, threat: 10, dist, isPlayer: true };
+  }
   const candidates = [];
   if (fn.alive) {
     const eff = fn.hp + fn.shield;
@@ -1234,11 +1258,7 @@ function initFortnite() {
     }
     placed++;
   }
-  const cars = [
-    { x: CENTER_X - 270, y: CENTER_Y - 180, dir: 0, vx: 0, vy: 0, hp: 80, driver: null },
-    { x: CENTER_X + 210, y: CENTER_Y + 150, dir: Math.PI/2, vx: 0, vy: 0, hp: 80, driver: null },
-    { x: CENTER_X - 300, y: CENTER_Y + 210, dir: Math.PI, vx: 0, vy: 0, hp: 80, driver: null },
-  ];
+  const car = { x: CENTER_X - 120, y: CENTER_Y - 80, dir: 0, vx: 0, vy: 0, hp: 5, driver: null };
   const spawnX = 200 + Math.random() * (FN_MAP - 400);
   const spawnY = 200 + Math.random() * (FN_MAP - 400);
   fn = {
@@ -1247,10 +1267,11 @@ function initFortnite() {
     dir: 0, speed: 1.5, shooting: false, shootCool: 0, inCar: null,
     alive: true, victory: false, oneKillDone: false,
     bullets: [], enemyBullets: [], walls: [], wallCool: 0, materials: 50,
-    trees, rocks, enemies, loot, village, cars,
+    trees, rocks, enemies, loot, village, car,
     storm: { radius: 1050, targetRadius: FN_STORM_PHASES[0][1], cx: CENTER_X, cy: CENTER_Y, shrinkTimer: FN_STORM_PHASES[0][0], phase: 0 },
     particles: [], messages: [], camX: 0, camY: 0,
     elapsed: 0, aliveCount: FN_ENEMY_COUNT, exitTimer: 0,
+    carExplosion: null,
   };
 }
 
@@ -1261,6 +1282,18 @@ function updateFortnite() {
 
   // Exit countdown
   if(!fn.alive || fn.victory || fn.oneKillDone) { fn.exitTimer--; return; }
+
+  // Car explosion animation: advance frame, then apply death when done
+  if (fn.carExplosion) {
+    fn.carExplosion.frame++;
+    fn.camX = fn.px - FN_W/2;
+    fn.camY = fn.py - FN_H/2;
+    if (fn.carExplosion.frame >= fn.carExplosion.maxFrames) {
+      if (fn.carExplosion.killedPlayer) { fn.alive = false; fn.exitTimer = 120; }
+      fn.carExplosion = null;
+    }
+    return;
+  }
 
   if (!fn.inCar) {
     const spd = fn.speed;
@@ -1274,13 +1307,13 @@ function updateFortnite() {
     fn.px = px2; fn.py = py2;
   }
   if (fn.inCar) {
-    const car = fn.inCar;
+    const car = fn.car;
     fn.px = car.x; fn.py = car.y;
-    if (keys['KeyE']) {
+    if (eKeyJustPressed) {
       eKeyJustPressed = false;
       fn.inCar = null; car.driver = null;
-      fn.px = car.x + Math.cos(car.dir) * (FN_CAR_RADIUS + 8);
-      fn.py = car.y + Math.sin(car.dir) * (FN_CAR_RADIUS + 8);
+      fn.px = car.x + Math.cos(car.dir) * (FN_CAR_RADIUS + 6);
+      fn.py = car.y + Math.sin(car.dir) * (FN_CAR_RADIUS + 6);
       fn.px = Math.max(4, Math.min(FN_MAP-4, fn.px));
       fn.py = Math.max(4, Math.min(FN_MAP-4, fn.py));
     } else {
@@ -1300,17 +1333,39 @@ function updateFortnite() {
   } else {
     if (eKeyJustPressed) {
       eKeyJustPressed = false;
-      let nearest = null, nearestD = FN_CAR_ENTER_DIST;
-      for (const car of fn.cars) {
-        if (car.hp <= 0 || car.driver) continue;
-        const d = Math.hypot(car.x - fn.px, car.y - fn.py);
-        if (d < nearestD) { nearestD = d; nearest = car; }
+      const car = fn.car;
+      if (car.hp > 0 && !car.driver && Math.hypot(car.x - fn.px, car.y - fn.py) < FN_CAR_ENTER_DIST) {
+        fn.inCar = fn.car; car.driver = 'player';
       }
-      if (nearest) { fn.inCar = nearest; nearest.driver = 'player'; }
     }
   }
   fn.camX = fn.px - FN_W/2;
   fn.camY = fn.py - FN_H/2;
+
+  // Car run-over: kill enemies under the car
+  const c = fn.car;
+  if (c.hp > 0) {
+    const runOverR = FN_CAR_RADIUS + 6;
+    for (const e of fn.enemies) {
+      if (!e.alive) continue;
+      if (Math.hypot(e.x - c.x, e.y - c.y) < runOverR) {
+        e.alive = false; fn.kills++; fn.aliveCount--; fn.materials += 20;
+        fnMsg(e.x - fn.camX, e.y - fn.camY, 'ECRASE!', '#ff8040');
+        if (typeof game !== 'undefined' && game && 'score' in game) game.score += 30;
+        if (fn.kills >= 1) { fn.oneKillDone = true; fn.exitTimer = 120; }
+        for (let i = 0; i < 12; i++) fnParticle(e.x, e.y, '#ff4040', 2);
+        const dropType = Math.random() < 0.35 ? 'weapon' : ['ammo','shield','medkit'][Math.floor(Math.random()*3)];
+        if (dropType === 'weapon') {
+          const wts = ['ar','smg','shotgun'];
+          const wt = wts[Math.floor(Math.random()*wts.length)];
+          const rarity = fnRollRarity();
+          const def = getWeaponDef(wt, rarity);
+          fn.loot.push({x:e.x,y:e.y,type:'weapon',weaponType:wt,rarity,ammo:def.ammoMax,taken:false});
+        } else fn.loot.push({x:e.x,y:e.y,type:dropType,taken:false});
+      }
+    }
+  }
+
   if(fn.shootCool > 0) fn.shootCool--;
   if(fn.wallCool > 0) fn.wallCool--;
   const mouseWorldX = mouse.x + fn.camX;
@@ -1330,20 +1385,20 @@ function updateFortnite() {
   for(const b of fn.bullets) {
     b.x += b.dx; b.y += b.dy; b.life--;
     if(fnBulletHitVillage(b.x, b.y)) { b.life = 0; continue; }
-    for (const car of fn.cars) {
-      if (car.hp <= 0) continue;
-      if (Math.hypot(b.x - car.x, b.y - car.y) < FN_CAR_RADIUS) {
-        b.life = 0; car.hp -= (b.dmg != null ? b.dmg : 12);
-        fnParticle(car.x, car.y, '#804020', 3);
-        if (car.hp <= 0) {
-          for (let i = 0; i < 25; i++) fnParticle(car.x, car.y, '#ff8040', 1);
-          if (fn.inCar === car) { fn.inCar = null; car.driver = null; fn.hp -= 30; if (fn.hp <= 0) { fn.alive = false; fn.exitTimer = 120; } }
-          for (const e of fn.enemies) {
-            if (!e.alive) continue;
-            if (Math.hypot(e.x - car.x, e.y - car.y) < 35) { e.hp -= 20; if (e.hp <= 0) { e.alive = false; fn.aliveCount--; } }
-          }
+    const car = fn.car;
+    if (car.hp > 0 && Math.hypot(b.x - car.x, b.y - car.y) < FN_CAR_RADIUS) {
+      b.life = 0; car.hp -= 1;
+      fnParticle(car.x, car.y, '#804020', 3);
+      if (car.hp <= 0) {
+        for (let i = 0; i < 25; i++) fnParticle(car.x, car.y, '#ff8040', 1);
+        const killedPlayer = fn.inCar === car;
+        if (killedPlayer) { fn.inCar = null; car.driver = null; fn.hp = 0; }
+        fn.carExplosion = { x: car.x, y: car.y, frame: 0, maxFrames: 55, killedPlayer };
+        playCarExplosionSound();
+        for (const e of fn.enemies) {
+          if (!e.alive) continue;
+          if (Math.hypot(e.x - car.x, e.y - car.y) < 20) { e.hp -= 20; if (e.hp <= 0) { e.alive = false; fn.aliveCount--; } }
         }
-        break;
       }
     }
     if (b.life <= 0) continue;
@@ -1514,12 +1569,19 @@ function updateFortnite() {
   for(const b of fn.enemyBullets) {
     b.x += b.dx; b.y += b.dy; b.life--;
     if(fnBulletHitVillage(b.x, b.y)) { b.life = 0; continue; }
-    for (const car of fn.cars) {
-      if (car.hp <= 0) continue;
-      if (Math.hypot(b.x - car.x, b.y - car.y) < FN_CAR_RADIUS) {
-        b.life = 0; car.hp -= 8; fnParticle(car.x, car.y, '#804020', 2);
-        if (car.hp <= 0 && fn.inCar === car) { fn.inCar = null; car.driver = null; fn.hp -= 30; if (fn.hp <= 0) { fn.alive = false; fn.exitTimer = 120; } }
-        break;
+    const carEnemy = fn.car;
+    if (carEnemy.driver && carEnemy.hp > 0 && Math.hypot(b.x - carEnemy.x, b.y - carEnemy.y) < FN_CAR_RADIUS) {
+      b.life = 0; carEnemy.hp -= 1; fnParticle(carEnemy.x, carEnemy.y, '#804020', 2);
+      if (carEnemy.hp <= 0) {
+        for (let i = 0; i < 25; i++) fnParticle(carEnemy.x, carEnemy.y, '#ff8040', 1);
+        const killedPlayer = fn.inCar === carEnemy;
+        if (killedPlayer) { fn.inCar = null; carEnemy.driver = null; fn.hp = 0; }
+        fn.carExplosion = { x: carEnemy.x, y: carEnemy.y, frame: 0, maxFrames: 55, killedPlayer };
+        playCarExplosionSound();
+        for (const e of fn.enemies) {
+          if (!e.alive) continue;
+          if (Math.hypot(e.x - carEnemy.x, e.y - carEnemy.y) < 20) { e.hp -= 20; if (e.hp <= 0) { e.alive = false; fn.aliveCount--; } }
+        }
       }
     }
     if (b.life <= 0) continue;
@@ -1794,41 +1856,56 @@ function drawFortnite() {
     drawPixelRect(sx-4,sy-7,Math.max(0,9*(e.hp/maxHp)),2,'#ff4040');
     if(e.shield > 0) drawPixelRect(sx-4,sy-9,Math.max(0,9*Math.min(1,e.shield/75)),2,'#4080ff');
   }
-  for(const car of fn.cars) {
-    if(car.hp <= 0) continue;
+  const car = fn.car;
+  if (car.hp > 0) {
     const sx = ox + car.x - cx, sy = oy + car.y - cy;
-    if(sx < -30 || sx > FN_W + 30 || sy < -30 || sy > FN_H + 30) continue;
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(car.dir);
-    const w = 28, h = 16;
-    const body = '#2d2d38';
-    const bodyHighlight = '#3d3d4a';
-    const cabin = '#3a3a48';
-    const windscreen = '#507090';
-    const wheel = '#1a1a20';
-    const rim = '#505560';
-    const headlight = '#fff8c0';
-    const taillight = '#ff4040';
-    drawPixelRect(-w, -h, w * 2, h * 2, body);
-    drawPixelRect(-w + 2, -h + 2, w * 2 - 4, h * 2 - 4, bodyHighlight);
-    drawPixelRect(-w + 6, -h + 2, 16, 12, cabin);
-    drawPixelRect(-w + 8, -h + 3, 12, 8, windscreen);
-    drawPixelRect(-w + 2, -h + 4, 6, 8, body);
-    drawPixelRect(w - 8, -h + 4, 6, 8, body);
-    drawPixelRect(-w - 2, -h - 3, 10, 6, wheel);
-    drawPixelRect(-w - 1, -h - 2, 6, 4, rim);
-    drawPixelRect(w - 8, -h - 3, 10, 6, wheel);
-    drawPixelRect(w - 7, -h - 2, 6, 4, rim);
-    drawPixelRect(-w - 2, h - 3, 10, 6, wheel);
-    drawPixelRect(-w - 1, h - 2, 6, 4, rim);
-    drawPixelRect(w - 8, h - 3, 10, 6, wheel);
-    drawPixelRect(w - 7, h - 2, 6, 4, rim);
-    drawPixelRect(-w + 4, -h - 1, 4, 2, taillight);
-    drawPixelRect(-w + 10, -h - 1, 4, 2, taillight);
-    drawPixelRect(w - 14, -h - 1, 4, 2, headlight);
-    drawPixelRect(w - 8, -h - 1, 4, 2, headlight);
-    ctx.restore();
+    if (sx >= -20 && sx <= FN_W + 20 && sy >= -20 && sy <= FN_H + 20) {
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(car.dir);
+      const w = 14, h = 8;
+      const body = '#2cb031';
+      const outline = '#0a0a0a';
+      const cabin = '#2a2a30';
+      const engine = '#808890';
+      const wheel = '#1a1a20';
+      drawPixelRect(-w, -h, w * 2, h * 2, outline);
+      drawPixelRect(-w + 1, -h + 1, w * 2 - 2, h * 2 - 2, body);
+      drawPixelRect(-w + 4, -h + 2, 8, 5, cabin);
+      drawPixelRect(-w + 6, -h + 3, 6, 4, cabin);
+      drawPixelRect(-2, -h + 3, 4, 2, engine);
+      drawPixelRect(-w - 1, -h - 2, 5, 4, wheel);
+      drawPixelRect(w - 4, -h - 2, 5, 4, wheel);
+      drawPixelRect(-w - 1, h - 2, 5, 4, wheel);
+      drawPixelRect(w - 4, h - 2, 5, 4, wheel);
+      ctx.restore();
+    }
+  }
+
+  // Car explosion sprite (growing burst then fade)
+  if (fn.carExplosion) {
+    const ex = fn.carExplosion;
+    const sx = ox + ex.x - cx, sy = oy + ex.y - cy;
+    if (sx >= -40 && sx <= FN_W + 40 && sy >= -40 && sy <= FN_H + 40) {
+      const progress = ex.frame / ex.maxFrames;
+      const growEnd = 0.4;
+      const size = progress <= growEnd ? 4 + (ex.frame / (ex.maxFrames * growEnd)) * 24 : 28;
+      const alpha = progress <= growEnd ? 1 : 1 - (progress - growEnd) / (1 - growEnd);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      const r = Math.max(2, Math.floor(size));
+      const yellow = '#f0d040';
+      const orange = '#ff8040';
+      const red = '#ff4040';
+      const dark = '#802020';
+      drawPixelRect(sx - r, sy - r, r * 2, r * 2, dark);
+      drawPixelRect(sx - r + 1, sy - r + 1, r * 2 - 2, r * 2 - 2, red);
+      drawPixelRect(sx - r + 2, sy - r + 2, r * 2 - 4, r * 2 - 4, orange);
+      const arm = Math.max(1, Math.floor(r * 0.6));
+      drawPixelRect(sx - arm, sy - 1, arm * 2, 2, yellow);
+      drawPixelRect(sx - 1, sy - arm, 2, arm * 2, yellow);
+      ctx.restore();
+    }
   }
 
   // Player

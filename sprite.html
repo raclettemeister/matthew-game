@@ -162,10 +162,16 @@ const FORTNITE_SPRITES = {
   Car: () => {
     const w = 28, h = 16;
     const g = Array(h).fill(null).map(() => Array(w).fill(null));
-    fillRect(g, 0, 0, 28, 16, '#4a4a58');
-    fillRect(g, 2, 2, 24, 12, '#606070');
-    fillRect(g, 4, 6, 6, 4, '#808090');
-    fillRect(g, 18, 6, 6, 4, '#808090');
+    fillRect(g, 0, 0, 28, 16, '#0a0a0a');
+    fillRect(g, 1, 1, 26, 14, '#2cb031');
+    fillRect(g, 4, 2, 8, 5, '#2a2a30');
+    fillRect(g, 14, 2, 8, 5, '#2a2a30');
+    fillRect(g, 10, 3, 6, 4, '#2a2a30');
+    fillRect(g, 12, 4, 4, 2, '#808890');
+    fillRect(g, 0, 0, 5, 4, '#1a1a20');
+    fillRect(g, 23, 0, 5, 4, '#1a1a20');
+    fillRect(g, 0, 12, 5, 4, '#1a1a20');
+    fillRect(g, 23, 12, 5, 4, '#1a1a20');
     return { w, h, data: g };
   },
   Tree: () => {

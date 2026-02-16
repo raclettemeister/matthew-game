@@ -48,6 +48,7 @@
 
   window.game = { score: 0, momAlert: 0, playingFortnite: true };
   window.playPopSound = function() {};
+  window.playCarExplosionSound = function() {};
 
   // Pixel font (required by fortnite-minigame.js)
   const CHARS = {
