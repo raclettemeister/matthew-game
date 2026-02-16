@@ -41,7 +41,7 @@ canvas.width = W * PIXEL_SCALE;
 canvas.height = H * PIXEL_SCALE;
 
 // Version du jeu — incrémenter à chaque mise à jour pour vérifier qu'on a la dernière
-const GAME_VERSION = '1.1';
+const GAME_VERSION = '1.4';
 let game = null;
 const REFRESH_ZONE = { x: W - 82, y: H - 14, w: 78, h: 12 };
 
@@ -141,8 +141,16 @@ canvas.addEventListener('mousedown', e => {
   mouse.down = true;
   if (!game) {
     if (titleBurgerOpen) {
-      const margin = 6, panelW = W - margin * 2, closeBtn = { x: margin + panelW - 58, y: margin + 6, w: 48, h: 26 };
-      if (mx >= closeBtn.x && mx <= closeBtn.x + closeBtn.w && my >= closeBtn.y && my <= closeBtn.y + closeBtn.h) titleBurgerOpen = false;
+      const margin = 6, panelW = W - margin * 2, panelX = margin, panelY = margin;
+      const closeBtn = { x: panelX + panelW - 58, y: panelY + 6, w: 48, h: 26 };
+      if (mx >= closeBtn.x && mx <= closeBtn.x + closeBtn.w && my >= closeBtn.y && my <= closeBtn.y + closeBtn.h) { titleBurgerOpen = false; return; }
+      const tabH = 36, tabW = (panelW - 24) / 3;
+      const tabParams = { x: panelX + 6, y: panelY + 6, w: tabW - 2, h: tabH - 4 };
+      const tabSucces = { x: panelX + 6 + tabW, y: panelY + 6, w: tabW - 2, h: tabH - 4 };
+      const tabShop = { x: panelX + 6 + tabW * 2, y: panelY + 6, w: tabW - 2, h: tabH - 4 };
+      if (mx >= tabParams.x && mx <= tabParams.x + tabParams.w && my >= tabParams.y && my <= tabParams.y + tabParams.h) { burgerTab = 'params'; return; }
+      if (mx >= tabSucces.x && mx <= tabSucces.x + tabSucces.w && my >= tabSucces.y && my <= tabSucces.y + tabSucces.h) { burgerTab = 'succes'; return; }
+      if (mx >= tabShop.x && mx <= tabShop.x + tabShop.w && my >= tabShop.y && my <= tabShop.y + tabShop.h) { burgerTab = 'shop'; return; }
       return;
     }
     if (titleParamsOpen) {
