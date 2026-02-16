@@ -41,7 +41,7 @@ canvas.width = W * PIXEL_SCALE;
 canvas.height = H * PIXEL_SCALE;
 
 // Version du jeu — incrémenter à chaque mise à jour pour vérifier qu'on a la dernière
-const GAME_VERSION = '1.5';
+const GAME_VERSION = '1.6';
 let game = null;
 const REFRESH_ZONE = { x: W - 82, y: H - 14, w: 78, h: 12 };
 
@@ -118,6 +118,17 @@ document.addEventListener('keydown', e => {
   keys[e.code] = true;
   if (e.code === 'KeyE') eKeyJustPressed = true;
   if (!game) {
+    if (!splashStarted && (e.code === 'Enter' || e.code === 'Space')) {
+      startSplashVideo();
+      e.preventDefault();
+      return;
+    }
+    if (splashStarted && splashVideo && !splashDone && (e.code === 'Enter' || e.code === 'Space')) {
+      splashDone = true;
+      splashVideo.pause();
+      e.preventDefault();
+      return;
+    }
     if (e.code === 'Enter' || e.code === 'Space') {
       const mx = mouse.x, my = mouse.y;
       const bn = TITLE_BTN_NORMAL, bd = TITLE_BTN_DEBUG;
@@ -147,6 +158,18 @@ canvas.addEventListener('mousedown', e => {
   const my = (e.clientY - rect.top) * H / rect.height;
   mouse.down = true;
   if (!game) {
+    if (!splashStarted) {
+      const startW = 140, startH = 44, startX = (W - startW) / 2, startY = (H - startH) / 2 - 10;
+      if (mx >= startX && mx <= startX + startW && my >= startY && my <= startY + startH) {
+        startSplashVideo();
+      }
+      return;
+    }
+    if (splashStarted && splashVideo && !splashDone) {
+      splashDone = true;
+      splashVideo.pause();
+      return;
+    }
     if (titleBurgerOpen) {
       const margin = 6, panelW = W - margin * 2, panelX = margin, panelY = margin;
       const closeBtn = { x: panelX + panelW - 58, y: panelY + 6, w: 48, h: 26 };
@@ -305,6 +328,27 @@ let audioCtx = null;
 let scaryOsc1 = null, scaryOsc2 = null, scaryGain = null, scaryTimeout = null;
 let audioMenu = null, audioGame = null, audioFortnite = null;
 let titleMusicPlaying = false, gameMusicPlaying = false, fortniteMusicPlaying = false;
+let splashVideo = null, splashDone = false, splashStarted = false;
+const SPLASH_FADE_LAST_SECONDS = 2;
+
+function startSplashVideo() {
+  if (splashStarted) return;
+  splashStarted = true;
+  const v = document.createElement('video');
+  v.src = 'assets/splash.mp4';
+  v.muted = false;
+  v.playsInline = true;
+  v.preload = 'auto';
+  v.addEventListener('canplaythrough', function onCanPlay() {
+    v.removeEventListener('canplaythrough', onCanPlay);
+    v.volume = 1;
+    v.play().catch(function() {});
+  });
+  v.addEventListener('ended', function() {
+    splashDone = true;
+  });
+  splashVideo = v;
+}
 
 function initMusicTracks() {
   if (audioMenu) return;
@@ -2080,6 +2124,16 @@ function addMessage(x,y,text,color) { game.messages.push({x,y,text,color,life:90
 // ── UPDATE ──
 function update() {
   if (!game) {
+    if (!splashDone) {
+      if (splashStarted && splashVideo && splashVideo.readyState >= 2 && isFinite(splashVideo.duration) && splashVideo.duration > 0) {
+        const remaining = splashVideo.duration - splashVideo.currentTime;
+        if (remaining <= SPLASH_FADE_LAST_SECONDS) {
+          const fadeProgress = 1 - remaining / SPLASH_FADE_LAST_SECONDS;
+          splashVideo.volume = Math.max(0, 1 - fadeProgress);
+        }
+      }
+      return;
+    }
     if (!titleMusicPlaying && settingsMusic) { playMenuMusic(); titleMusicPlaying = true; }
     return;
   }
@@ -2349,6 +2403,29 @@ function draw() {
 
   ctx.save();
   ctx.scale(PIXEL_SCALE, PIXEL_SCALE);
+
+  // Ecran START (avant splash) : clic pour lancer le splash
+  if (!splashDone && !splashStarted) {
+    drawPixelRect(0, 0, W, H, '#0a0a14');
+    const startW = 140, startH = 44, startX = (W - startW) / 2, startY = (H - startH) / 2 - 10;
+    drawPixelRect(startX - 4, startY - 4, startW + 8, startH + 8, '#303050');
+    drawPixelRect(startX, startY, startW, startH, '#4060a0');
+    drawText('START', W / 2, startY + startH / 2 - 4, '#c0e0ff', 2, 'center');
+    ctx.restore();
+    return;
+  }
+
+  // Splash video (apres clic START)
+  if (splashStarted && splashVideo && !splashDone) {
+    if (splashVideo.readyState >= 2) {
+      ctx.drawImage(splashVideo, 0, 0, W, H);
+    } else {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, W, H);
+    }
+    ctx.restore();
+    return;
+  }
 
   // Title screen
   if(!game) {
