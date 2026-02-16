@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprite Editor – Fortnite minigame</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: system-ui, sans-serif;
+  padding: 16px;
+  min-height: 100vh;
+}
+h1 { font-size: 1.25rem; margin-bottom: 12px; color: #40d870; }
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.controls label { display: flex; align-items: center; gap: 6px; }
+.controls input[type="number"] { width: 56px; padding: 4px 8px; background: #2a2a4a; border: 1px solid #444; color: #fff; border-radius: 4px; }
+.controls button {
+  padding: 8px 14px;
+  background: #4060a0;
+  border: none;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.controls button:hover { background: #5080c0; }
+.controls button.danger { background: #a04040; }
+.controls button.danger:hover { background: #c05050; }
+.palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.palette .swatch {
+  width: 24px; height: 24px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.palette .swatch.active { border-color: #fff; box-shadow: 0 0 0 1px #40d870; }
+.container { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.sprite-list {
+  min-width: 200px;
+  background: #0e0e1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px;
+}
+.sprite-list h3 { font-size: 0.9rem; color: #40d870; margin-bottom: 8px; }
+.sprite-list ul { list-style: none; }
+.sprite-list li {
+  padding: 6px 10px;
+  margin: 2px 0;
+  background: #1a1a2e;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.sprite-list li:hover { background: #2a2a4a; }
+.sprite-list li.active { background: #2a4a3a; color: #40d870; }
+.canvas-wrap {
+  background: #0a0a12;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #333;
+}
+#grid {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+  cursor: crosshair;
+}
+.export-area { flex: 1; min-width: 280px; }
+.export-area h3 { font-size: 0.95rem; margin-bottom: 8px; color: #a0a0c0; }
+.export-area textarea {
+  width: 100%;
+  height: 200px;
+  background: #0a0a12;
+  border: 1px solid #333;
+  color: #a0e0a0;
+  font-family: monospace;
+  font-size: 12px;
+  padding: 10px;
+  border-radius: 6px;
+  resize: vertical;
+}
+.export-area button { margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>Sprite Editor – pixel art for Fortnite minigame</h1>
+<div class="controls">
+  <label>Grid: <input type="number" id="gridW" value="16" min="4" max="64" /> × <input type="number" id="gridH" value="16" min="4" max="64" /></label>
+  <label>Scale: <input type="number" id="scale" value="12" min="4" max="32" /></label>
+  <button id="btnClear">Clear</button>
+  <button id="btnFill">Fill current</button>
+  <button id="btnErase" class="danger">Eraser</button>
+  <button id="btnExportArray">Copy as 2D array</button>
+  <button id="btnExportDraw">Copy as drawPixelRect</button>
+</div>
+<div class="palette" id="palette"></div>
+<div class="container">
+  <div class="sprite-list">
+    <h3>Sprites in game (Fortnite minigame)</h3>
+    <ul id="spriteList"></ul>
+  </div>
+  <div class="canvas-wrap">
+    <canvas id="grid"></canvas>
+  </div>
+  <div class="export-area">
+    <h3>Exported code (paste into minigame or main game)</h3>
+    <textarea id="exportOut" readonly placeholder="Click Copy as 2D array or Copy as drawPixelRect…"></textarea>
+    <button id="btnCopyText">Copy textarea to clipboard</button>
+  </div>
+</div>
+
+<script>
+const DEFAULT_PALETTE = [
+  '#181820','#f0c090','#483018','#d83838','#a82828','#4848a8','#383888',
+  '#40ff80','#40d870','#f0d040','#4080ff','#808090','#4a4a58','#606070',
+  '#8a6040','#6a4a28','#4a4030','#3a3025','#505058','#fff','#804020','#ff8040',
+  '#e04040','#c0a030'
+];
+
+function fillRect(grid, x, y, w, h, c) {
+  for (let j = y; j < y + h && j < grid.length; j++)
+    for (let i = x; i < x + w && i < (grid[j]?.length ?? 0); i++)
+      grid[j][i] = c;
+}
+
+// Sprites used in the Fortnite minigame (match game draw logic)
+const FORTNITE_SPRITES = {
+  Player: () => {
+    const w = 11, h = 11;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 3, 3, 7, 7, '#d83838');
+    fillRect(g, 4, 0, 5, 2, '#483018');
+    fillRect(g, 5, 4, 3, 3, '#f0c090');
+    fillRect(g, 8, 5, 3, 3, '#505050');
+    return { w, h, data: g };
+  },
+  Enemy: () => {
+    const w = 11, h = 11;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 3, 3, 7, 7, '#e04040');
+    fillRect(g, 4, 0, 5, 2, '#181820');
+    fillRect(g, 5, 4, 3, 3, '#f0c090');
+    fillRect(g, 3, 0, 9, 2, '#303030');
+    fillRect(g, 3, 0, 6, 2, '#ff4040');
+    return { w, h, data: g };
+  },
+  Car: () => {
+    const w = 28, h = 16;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 0, 0, 28, 16, '#4a4a58');
+    fillRect(g, 2, 2, 24, 12, '#606070');
+    fillRect(g, 4, 6, 6, 4, '#808090');
+    fillRect(g, 18, 6, 6, 4, '#808090');
+    return { w, h, data: g };
+  },
+  Tree: () => {
+    const w = 11, h = 10;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 4, 5, 3, 5, '#5a3820');
+    fillRect(g, 1, 0, 9, 5, '#2a8a20');
+    fillRect(g, 2, 0, 7, 4, '#30a028');
+    return { w, h, data: g };
+  },
+  Rock: () => {
+    const w = 10, h = 10;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 1, 2, 8, 6, '#707070');
+    fillRect(g, 2, 1, 6, 8, '#808080');
+    fillRect(g, 3, 3, 4, 4, '#909090');
+    return { w, h, data: g };
+  },
+  Crate: () => {
+    const w = 14, h = 12;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 0, 0, 14, 12, '#8a6a42');
+    fillRect(g, 1, 1, 12, 10, '#6a4a22');
+    fillRect(g, 2, 2, 10, 2, '#9a7a52');
+    return { w, h, data: g };
+  },
+  Barrier: () => {
+    const w = 24, h = 8;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 0, 0, 24, 8, '#505058');
+    fillRect(g, 1, 1, 22, 6, '#606068');
+    return { w, h, data: g };
+  },
+  'Loot (ammo)': () => {
+    const w = 8, h = 8;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 1, 1, 6, 6, '#f0d040');
+    fillRect(g, 2, 2, 4, 4, '#fff8');
+    return { w, h, data: g };
+  },
+  'Loot (shield)': () => {
+    const w = 8, h = 8;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 1, 1, 6, 6, '#4080ff');
+    fillRect(g, 2, 2, 4, 4, '#fff8');
+    return { w, h, data: g };
+  },
+  'Loot (medkit)': () => {
+    const w = 8, h = 8;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 1, 1, 6, 6, '#40ff80');
+    fillRect(g, 2, 2, 4, 4, '#fff8');
+    return { w, h, data: g };
+  },
+  'Loot (weapon)': () => {
+    const w = 8, h = 8;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 1, 1, 6, 6, '#c0a030');
+    fillRect(g, 2, 2, 4, 4, '#fff8');
+    return { w, h, data: g };
+  },
+  'Player wall': () => {
+    const w = 14, h = 14;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 1, 1, 12, 12, 'rgba(210,170,110,0.9)');
+    fillRect(g, 2, 2, 10, 10, 'rgba(180,140,80,0.9)');
+    fillRect(g, 3, 6, 8, 2, '#8a6a40');
+    return { w, h, data: g };
+  },
+  'Bullet (player)': () => {
+    const w = 4, h = 4;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 0, 0, 3, 3, '#f0f040');
+    return { w, h, data: g };
+  },
+  'Bullet (enemy)': () => {
+    const w = 3, h = 3;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 0, 0, 2, 2, '#ff6060');
+    return { w, h, data: g };
+  },
+  Well: () => {
+    const w = 18, h = 14;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 0, 0, 18, 14, '#505058');
+    fillRect(g, 2, 2, 14, 10, '#606068');
+    fillRect(g, 4, 4, 10, 6, '#404048');
+    fillRect(g, 6, 3, 4, 3, '#8a7a50');
+    return { w, h, data: g };
+  },
+  House: () => {
+    const w = 30, h = 24;
+    const g = Array(h).fill(null).map(() => Array(w).fill(null));
+    fillRect(g, 0, 22, 30, 3, 'rgba(0,0,0,0.3)');
+    fillRect(g, 0, 0, 30, 24, '#8a6040');
+    fillRect(g, 2, 2, 26, 20, '#6a4a28');
+    fillRect(g, 2, 2, 26, 3, '#9a7050');
+    fillRect(g, 12, 14, 6, 8, '#3a2818');
+    return { w, h, data: g };
+  }
+};
+
+let gridW = 16, gridH = 16, scale = 12;
+let data = [];
+let currentColor = '#f0c090';
+let eraser = false;
+const canvas = document.getElementById('grid');
+const ctx = canvas.getContext('2d');
+
+function buildPalette() {
+  const el = document.getElementById('palette');
+  el.innerHTML = '';
+  DEFAULT_PALETTE.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (c === currentColor ? ' active' : '');
+    sw.style.background = c;
+    sw.title = c;
+    sw.addEventListener('click', () => {
+      currentColor = c;
+      eraser = false;
+      document.querySelectorAll('.palette .swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+    });
+    el.appendChild(sw);
+  });
+}
+
+function initGrid() {
+  gridW = Math.max(4, Math.min(64, parseInt(document.getElementById('gridW').value, 10) || 16));
+  gridH = Math.max(4, Math.min(64, parseInt(document.getElementById('gridH').value, 10) || 16));
+  scale = Math.max(4, Math.min(32, parseInt(document.getElementById('scale').value, 10) || 12));
+  data = [];
+  for (let y = 0; y < gridH; y++) {
+    data[y] = [];
+    for (let x = 0; x < gridW; x++) data[y][x] = null;
+  }
+  canvas.width = gridW * scale;
+  canvas.height = gridH * scale;
+  drawGrid();
+}
+
+function drawGrid() {
+  ctx.fillStyle = '#1a1a2a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      const c = data[y][x];
+      if (c) {
+        ctx.fillStyle = c;
+        ctx.fillRect(x * scale, y * scale, scale, scale);
+      }
+    }
+  }
+  ctx.strokeStyle = 'rgba(80,80,120,0.4)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= gridW; i++) ctx.strokeRect(i * scale, 0, 0, gridH * scale);
+  for (let j = 0; j <= gridH; j++) ctx.strokeRect(0, j * scale, gridW * scale, 0);
+  for (let i = 0; i < gridW; i++)
+    for (let j = 0; j < gridH; j++)
+      ctx.strokeRect(i * scale, j * scale, scale, scale);
+}
+
+function getCell(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) * (canvas.width / rect.width) / scale);
+  const y = Math.floor((e.clientY - rect.top) * (canvas.height / rect.height) / scale);
+  if (x >= 0 && x < gridW && y >= 0 && y < gridH) return { x, y };
+  return null;
+}
+
+canvas.addEventListener('mousedown', e => {
+  const cell = getCell(e);
+  if (!cell) return;
+  data[cell.y][cell.x] = eraser ? null : currentColor;
+  drawGrid();
+  let move = (e2) => {
+    const c = getCell(e2);
+    if (c) { data[c.y][c.x] = eraser ? null : currentColor; drawGrid(); }
+  };
+  let up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+  document.addEventListener('mousemove', move);
+  document.addEventListener('mouseup', up);
+});
+
+document.getElementById('gridW').addEventListener('change', initGrid);
+document.getElementById('gridH').addEventListener('change', initGrid);
+document.getElementById('scale').addEventListener('change', initGrid);
+
+document.getElementById('btnClear').addEventListener('click', () => {
+  for (let y = 0; y < gridH; y++) for (let x = 0; x < gridW; x++) data[y][x] = null;
+  drawGrid();
+});
+
+document.getElementById('btnFill').addEventListener('click', () => {
+  for (let y = 0; y < gridH; y++) for (let x = 0; x < gridW; x++) data[y][x] = currentColor;
+  drawGrid();
+});
+
+document.getElementById('btnErase').addEventListener('click', () => { eraser = !eraser; });
+
+function exportArray() {
+  const rows = data.map(row => '  [' + row.map(c => c ? `'${c}'` : 'null').join(',') + ']');
+  const out = '[\n' + rows.join(',\n') + '\n]';
+  document.getElementById('exportOut').value = out;
+  return out;
+}
+
+function exportDraw() {
+  const lines = [];
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      const c = data[y][x];
+      if (c) lines.push(`drawPixelRect(ox + ${x}, oy + ${y}, 1, 1, '${c}');`);
+    }
+  }
+  const out = lines.join('\n');
+  document.getElementById('exportOut').value = out;
+  return out;
+}
+
+document.getElementById('btnExportArray').addEventListener('click', () => {
+  exportArray();
+  navigator.clipboard.writeText(document.getElementById('exportOut').value);
+  document.getElementById('exportOut').placeholder = 'Copied 2D array to clipboard.';
+});
+
+document.getElementById('btnExportDraw').addEventListener('click', () => {
+  exportDraw();
+  navigator.clipboard.writeText(document.getElementById('exportOut').value);
+  document.getElementById('exportOut').placeholder = 'Copied drawPixelRect calls to clipboard.';
+});
+
+document.getElementById('btnCopyText').addEventListener('click', () => {
+  navigator.clipboard.writeText(document.getElementById('exportOut').value);
+});
+
+function loadGameSprite(name) {
+  const fn = FORTNITE_SPRITES[name];
+  if (!fn) return;
+  const { w, h, data: spriteData } = fn();
+  gridW = w;
+  gridH = h;
+  data = spriteData.map(row => row.slice());
+  document.getElementById('gridW').value = gridW;
+  document.getElementById('gridH').value = gridH;
+  canvas.width = gridW * scale;
+  canvas.height = gridH * scale;
+  drawGrid();
+  document.querySelectorAll('#spriteList li').forEach(li => li.classList.remove('active'));
+  const activeLi = document.querySelector(`#spriteList li[data-sprite="${name}"]`);
+  if (activeLi) activeLi.classList.add('active');
+}
+
+const listEl = document.getElementById('spriteList');
+Object.keys(FORTNITE_SPRITES).sort().forEach(name => {
+  const li = document.createElement('li');
+  li.textContent = name;
+  li.dataset.sprite = name;
+  li.addEventListener('click', () => loadGameSprite(name));
+  listEl.appendChild(li);
+});
+
+buildPalette();
+initGrid();
+</script>
+</body>
+</html>
