@@ -175,16 +175,29 @@ canvas.addEventListener('mousedown', e => {
     return;
   }
   const p = game.player;
-  if (game.nearestItem && !p.carrying) { p.carrying = game.nearestItem; game.nearestItem = null; playPopSound(); return; }
-  if (game.nearestZone && p.carrying && game.nearestZone.id === p.carrying.cat) {
-    p.carrying.placed = true;
-    game.cleaned++;
-    game.score += 50;
-    playPopSound();
-    p.carrying = null;
-    game.nearestZone = null;
-    if (game.cleaned >= game.totalItems && game.playedFortniteOnce) game.phase = 'win';
-    return;
+  // Clic gauche : ramasser l'objet sous le curseur, ou poser sur le meuble sous le curseur
+  if (e.button === 0) {
+    if (!p.carrying) {
+      const itemUnder = getItemAt(mx, my);
+      if (itemUnder) {
+        p.carrying = itemUnder;
+        game.nearestItem = null;
+        playPopSound();
+        return;
+      }
+    } else {
+      const zoneUnder = getZoneAt(mx, my);
+      if (zoneUnder && zoneUnder.id === p.carrying.cat) {
+        p.carrying.placed = true;
+        game.cleaned++;
+        game.score += 50;
+        playPopSound();
+        p.carrying = null;
+        game.nearestZone = null;
+        if (game.cleaned >= game.totalItems && game.playedFortniteOnce) game.phase = 'win';
+        return;
+      }
+    }
   }
   if (!p.carrying && mx >= PC.x - 5 && mx <= PC.x + PC.w + 15 && my >= PC.y - 5 && my <= PC.y + PC.h + 20) {
     game.playingFortnite = true;
@@ -735,6 +748,22 @@ const ZONES = [
 ];
 function getZoneById(id) { return ZONES.find(z => z.id === id) || null; }
 function getNearestZone() { if (!game || !game.player.carrying) return null; return getZoneById(game.player.carrying.cat); }
+// Objet sous le curseur (clic = ramasser cet objet)
+function getItemAt(mx, my) {
+  if (!game || game.playingFortnite) return null;
+  for (const item of game.items) {
+    if (item.placed || item === game.julien.carrying) continue;
+    if (Math.hypot(mx - item.x, my - item.y) < 15) return item;
+  }
+  return null;
+}
+// Zone (meuble) sous le curseur (clic = poser ici si bon meuble)
+function getZoneAt(mx, my) {
+  for (const z of ZONES) {
+    if (mx >= z.x - 10 && mx <= z.x + z.w + 10 && my >= z.y - 10 && my <= z.y + z.h + 20) return z;
+  }
+  return null;
+}
 
 function drawFurniture(zone,highlight) {
   const{x,y,w,h,color,colorLt,label}=zone;
@@ -2005,14 +2034,14 @@ function update() {
   }
 
   // Mom alert passive (remonte pour que maman finisse par arriver)
-  if(game.timeLeft%120===0) {
-    game.momAlert = Math.min(100, game.momAlert+0.8);
-    if(!game.playingFortnite && game.addiction>50) game.momAlert = Math.min(100, game.momAlert+0.5);
+  if(game.timeLeft%60===0) {
+    game.momAlert = Math.min(100, game.momAlert+1.2);
+    if(!game.playingFortnite && game.addiction>50) game.momAlert = Math.min(100, game.momAlert+0.8);
   }
 
   // Mom random trigger (plus souvent quand la barre est haute)
   if(!game.mom.active && !game.julien.active && game.timeLeft%60===0) {
-    if(Math.random() < game.momAlert/350) triggerMom();
+    if(Math.random() < game.momAlert/180) triggerMom();
   }
 
   // Julien : premier spawn 10 sec ; après despawn cooldown 15, 20, 25... (set au despawn)
@@ -2144,11 +2173,13 @@ function update() {
     }
   }
 
-  game.nearestZone = p.carrying ? getNearestZone() : null;
-  game.nearestItem = null;
-  if(!p.carrying && !game.playingFortnite) {
-    let nd=25;
-    for(const item of game.items) { if(item.placed || item===game.julien.carrying) continue; const d=Math.hypot(p.x-item.x,p.y-item.y); if(d<nd){nd=d;game.nearestItem=item;} }
+  // Surligner selon le curseur (clic = objet/zone sous la souris)
+  game.nearestItem = getItemAt(mouse.x, mouse.y);
+  if (p.carrying) {
+    const z = getZoneAt(mouse.x, mouse.y);
+    game.nearestZone = (z && z.id === p.carrying.cat) ? z : null;
+  } else {
+    game.nearestZone = null;
   }
   game.messages = game.messages.filter(m=>{m.life--;m.y-=0.5;return m.life>0;});
   if(game.shakeTimer>0) game.shakeTimer--;
